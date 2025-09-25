@@ -9,6 +9,8 @@ export interface Medication {
   dosage: string;
   schedule: { time: string; taken: boolean }[];
   instructions: string;
+  category?: string;
+  condition?: string;
 }
 
 export interface Prescription {
@@ -52,25 +54,59 @@ export interface Patient {
     id: string;
     name: string;
     age: number;
+    gender?: string;
     lastVisit: string;
+    nextAppointment?: string;
     compliance: string;
     complianceStatus: ComplianceStatus;
     doctorId: string;
     hospitalId: string;
     medications: Medication[];
+    medicalConditions?: string[];
+    contactNumber?: string;
+    email?: string;
+    address?: string;
+    bloodGroup?: string;
+    emergencyContact?: {
+        name: string;
+        relation: string;
+        phone: string;
+    };
 }
 
 export interface Doctor {
   id: string;
   name: string;
+  gender?: string;
   specialty: string;
   hospitalId: string;
+  yearsOfExperience?: number;
+  qualifications?: string;
+  consultationFee?: number;
+  availability?: Array<{
+    day: string;
+    slots: Array<{ time: string; available: boolean }>;
+  }>;
+  contactNumber?: string;
+  email?: string;
+  licenseNumber?: string;
+  rating?: number;
 }
 
 export interface Hospital {
   id: string;
   name: string;
   location: string;
+  address?: string;
+  type?: string;
+  established?: number;
+  bedCapacity?: number;
+  departments?: string[];
+  accreditation?: string[];
+  contactNumber?: string;
+  email?: string;
+  website?: string;
+  emergencyNumber?: string;
   doctors: Doctor[];
   patients: Patient[];
 }

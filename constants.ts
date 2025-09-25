@@ -1,13 +1,12 @@
-import { generateMockData } from './mockDataGenerator';
+import { HOSPITALS, DOCTORS, PATIENTS, DATABASE_SUMMARY } from './database/mockDatabase';
 // Fix: Import user types to correctly type mock admin users.
 import type { Hospital, Doctor, Patient, SuperAdminUser, HospitalAdminUser } from './types';
 
-// Generate a large, interconnected dataset
-const database = generateMockData(100, 100, 100);
-
-export const MOCK_HOSPITALS: Hospital[] = database.hospitals;
-export const MOCK_DOCTORS: Doctor[] = database.doctors;
-export const MOCK_PATIENTS: Patient[] = database.patients;
+// Use the comprehensive database
+export const MOCK_HOSPITALS: Hospital[] = HOSPITALS;
+export const MOCK_DOCTORS: Doctor[] = DOCTORS;
+export const MOCK_PATIENTS: Patient[] = PATIENTS;
+export const DATABASE_STATS = DATABASE_SUMMARY;
 
 // Fix: Add mock compliance data for the patient dashboard chart.
 export const COMPLIANCE_DATA = [
