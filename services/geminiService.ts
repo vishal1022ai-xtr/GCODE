@@ -2,7 +2,17 @@ import { GoogleGenAI, Chat } from "@google/genai";
 // Fix: Corrected import path for types from './types' to '../types'.
 import type { ChatMessage, Prescription } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+// Handle environment variable safely for local development
+const getApiKey = (): string => {
+  const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn('No API key found. Set GEMINI_API_KEY environment variable for AI functionality.');
+    return 'dummy-key-for-development'; // Fallback for development without API key
+  }
+  return apiKey;
+};
+
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 const systemInstruction = `You are "MediMinder AI", a friendly, multilingual AI healthcare assistant for a medicine reminder app. 
 Your role is to answer patient questions about their medication, side effects, and general well-being in a simple, clear, and supportive manner. 
@@ -32,6 +42,13 @@ export const getAIResponse = async (
     });
   }
 
-  const result = await currentChat.sendMessage({ message: newMessage });
-  return { chat: currentChat, response: result.text };
+  try {
+    const result = await currentChat.sendMessage({ message: newMessage });
+    const responseText = result.text || 'Sorry, I could not generate a response at this time.';
+    return { chat: currentChat, response: responseText };
+  } catch (error) {
+    console.error('AI response error:', error);
+    const fallbackResponse = 'Sorry, I am currently unavailable. Please consult your doctor for any medication concerns.';
+    return { chat: currentChat, response: fallbackResponse };
+  }
 };
