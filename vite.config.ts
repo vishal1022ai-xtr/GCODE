@@ -8,14 +8,15 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 5000,
         host: '0.0.0.0',
+        allowedHosts: true,
         hmr: {
-          port: 5000
+          port: 5000,
+          clientPort: 443
         }
       },
       plugins: [react()],
       define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || '')
       },
       resolve: {
         alias: {
