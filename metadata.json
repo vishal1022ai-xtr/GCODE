@@ -1,0 +1,5 @@
+{
+  "name": "MediMinder AI",
+  "description": "A smart medicine reminder and compliance system for patients and hospitals, featuring an AI-powered virtual assistant to answer patient queries.",
+  "requestFramePermissions": []
+}
