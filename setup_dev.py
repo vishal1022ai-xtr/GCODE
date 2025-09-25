@@ -447,6 +447,110 @@ export default defineConfig(({{ mode }}) => {{
                     print("4. If issues persist, try: npm install --legacy-peer-deps")
                     sys.exit(1)
 
+    def setup_api_key(self):
+        """Set up API key for AI functionality"""
+        env_file = self.project_root / ".env"
+        
+        # Check if API key already exists
+        existing_key = None
+        if env_file.exists():
+            try:
+                with open(env_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    for line in content.split('\n'):
+                        if line.startswith('GEMINI_API_KEY=') and line != 'GEMINI_API_KEY=':
+                            existing_key = line.split('=', 1)[1].strip()
+                            break
+            except Exception:
+                pass
+        
+        if existing_key:
+            self.print_status("Gemini API key found in .env file", "success")
+            return True
+        
+        # Ask user if they want to set up API key
+        self.print_status("AI Chat functionality requires a Gemini API key", "info")
+        print("\n" + "="*60)
+        print("🤖 OPTIONAL: Set up AI Chat functionality")
+        print("="*60)
+        print("The app works without an API key, but AI chat will be disabled.")
+        print("To enable AI chat, you need a free Gemini API key from Google.")
+        print("\nSteps to get a free API key:")
+        print("1. Visit: https://aistudio.google.com/app/apikey")
+        print("2. Sign in with your Google account")
+        print("3. Click 'Create API Key'")
+        print("4. Copy the generated key")
+        
+        while True:
+            choice = input(f"\nWould you like to add your Gemini API key now? (y/n/skip): ").strip().lower()
+            
+            if choice in ['n', 'no', 'skip', '']:
+                self.print_status("Skipping API key setup. App will work without AI chat.", "info")
+                self.create_env_file_template()
+                return True
+                
+            elif choice in ['y', 'yes']:
+                api_key = input("\nPaste your Gemini API key here: ").strip()
+                
+                if not api_key:
+                    print("No API key entered. Please try again or choose 'skip'.")
+                    continue
+                
+                if len(api_key) < 10:
+                    print("API key seems too short. Please check and try again.")
+                    continue
+                
+                # Save to .env file
+                try:
+                    env_content = f"# Gemini AI API Key for chat functionality\nGEMINI_API_KEY={api_key}\n"
+                    
+                    # Preserve existing content if .env exists
+                    if env_file.exists():
+                        with open(env_file, 'r', encoding='utf-8') as f:
+                            existing_content = f.read()
+                        
+                        # Remove any existing GEMINI_API_KEY lines
+                        lines = existing_content.split('\n')
+                        filtered_lines = [line for line in lines if not line.startswith('GEMINI_API_KEY=')]
+                        env_content = '\n'.join(filtered_lines).strip() + '\n\n' + env_content
+                    
+                    with open(env_file, 'w', encoding='utf-8') as f:
+                        f.write(env_content)
+                    
+                    self.print_status("API key saved to .env file successfully!", "success")
+                    self.print_status("AI chat functionality will be available in the app", "success")
+                    return True
+                    
+                except Exception as e:
+                    self.print_status(f"Failed to save API key: {e}", "error")
+                    return False
+            else:
+                print("Please enter 'y' for yes, 'n' for no, or 'skip'.")
+
+    def create_env_file_template(self):
+        """Create a .env template file for future use"""
+        env_file = self.project_root / ".env"
+        
+        if not env_file.exists():
+            try:
+                template_content = """# Environment Variables for MediMinder AI
+# 
+# To enable AI chat functionality, add your Gemini API key below:
+# GEMINI_API_KEY=your_api_key_here
+#
+# Get a free API key at: https://aistudio.google.com/app/apikey
+
+# Development server configuration (optional)
+# VITE_HOST=localhost
+# VITE_PORT=5173
+"""
+                with open(env_file, 'w', encoding='utf-8') as f:
+                    f.write(template_content)
+                
+                self.print_status("Created .env template file for future API key setup", "info")
+            except Exception as e:
+                self.print_status(f"Could not create .env template: {e}", "warning")
+
     def validate_environment(self):
         """Validate the development environment setup"""
         self.print_status("Validating development environment...", "info")
@@ -571,10 +675,13 @@ export default defineConfig(({{ mode }}) => {{
         # Step 4: Install dependencies
         self.install_dependencies()
         
-        # Step 5: Validate environment
+        # Step 5: Set up API key for AI functionality
+        self.setup_api_key()
+        
+        # Step 6: Validate environment
         self.validate_environment()
         
-        # Step 6: Start the development server
+        # Step 7: Start the development server
         self.print_status("Setup complete! Starting development server...", "success")
         print("\nPress Ctrl+C to stop the development server")
         print("-" * 60)
