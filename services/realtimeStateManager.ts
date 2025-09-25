@@ -330,13 +330,18 @@ class RealtimeStateManager {
   private calculateSystemMetrics(state?: AppState): SystemMetrics {
     const currentState = state || this.state;
     
+    // Handle case where state might be undefined during initialization
+    const riskAlerts = currentState?.riskAlerts || [];
+    const aiInsights = currentState?.aiInsights || [];
+    const careActions = currentState?.careActions || [];
+    
     return {
       totalPatients: PATIENTS.length,
-      activeAlerts: currentState.riskAlerts.filter(alert => !alert.acknowledged).length,
+      activeAlerts: riskAlerts.filter(alert => !alert.acknowledged).length,
       complianceRate: this.calculateOverallComplianceRate(),
       averageRiskScore: this.calculateAverageRiskScore(),
-      aiInsightCount: currentState.aiInsights.length,
-      pendingActions: currentState.careActions.filter(action => action.status === 'pending').length,
+      aiInsightCount: aiInsights.length,
+      pendingActions: careActions.filter(action => action.status === 'pending').length,
       lastDataRefresh: new Date()
     };
   }
