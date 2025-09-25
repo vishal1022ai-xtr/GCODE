@@ -91,3 +91,13 @@ The application expects a `GEMINI_API_KEY` environment variable for AI functiona
 - AI chat functionality requires valid Gemini API key
 - Theme switching is implemented with Tailwind's dark mode
 - All dependencies are locally installed via npm (no CDN dependencies)
+
+## Security Considerations
+**IMPORTANT**: The current implementation exposes the Gemini API key in the client-side bundle, which is a security vulnerability for production use. The original project design uses Google Gemini AI directly in the browser.
+
+**For Production**: Consider implementing a backend proxy that:
+1. Keeps the API key secure on the server side
+2. Exposes safe endpoints for the frontend to call
+3. Acts as a middleware between the frontend and Gemini API
+
+This would require restructuring the application architecture but is recommended for production deployment.
