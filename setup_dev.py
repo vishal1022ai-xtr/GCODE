@@ -272,6 +272,11 @@ class DevSetup:
         with open(vite_config_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
+        # Check if it already has proper local development configuration
+        if 'localhost' in content and f'VITE_PORT || {port}' in content:
+            self.print_status("vite.config.ts already configured for local development", "info")
+            return True
+        
         # Create updated config with environment variable support
         updated_config = f'''import path from 'path';
 import {{ defineConfig, loadEnv }} from 'vite';
@@ -279,28 +284,73 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({{ mode }}) => {{
     const env = loadEnv(mode, '.', '');
-    const host = env.VITE_HOST || 'localhost';
-    const port = Number(env.VITE_PORT || {port});
+    
+    // Detect if running in Replit environment
+    const isReplit = process.env.REPL_ID || process.env.REPLIT_DEPLOYMENT;
+    
+    // Configure for environment-specific settings
+    const host = env.VITE_HOST || (isReplit ? '0.0.0.0' : 'localhost');
+    const port = Number(env.VITE_PORT || (isReplit ? 5000 : {port}));
     
     return {{
       server: {{
         port: port,
         host: host,
-        open: true,
+        open: !isReplit, // Only auto-open browser in local development
+        allowedHosts: isReplit ? true : undefined,
+        strictPort: false, // Allow Vite to try next port if current is busy
         hmr: {{
-          port: port
-        }}
+          port: port,
+          ...(isReplit && {{ clientPort: 443 }})
+        }},
+        cors: true,
+        clearScreen: false
       }},
-      plugins: [react()],
+      plugins: [
+        react({{
+          include: "**/*.{{jsx,tsx,js,ts}}",
+        }})
+      ],
       define: {{
-        'process.env.API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || ''),
-        'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || '')
+        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.API_KEY || ''),
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.API_KEY || ''),
+        'process.env.NODE_ENV': JSON.stringify(mode)
       }},
       resolve: {{
         alias: {{
           '@': path.resolve(__dirname, '.'),
+          '~': path.resolve(__dirname, '.'),
+          'src': path.resolve(__dirname, '.'),
+        }},
+        extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json']
+      }},
+      optimizeDeps: {{
+        include: [
+          'react',
+          'react-dom',
+          '@google/genai'
+        ],
+        force: mode === 'development'
+      }},
+      build: {{
+        outDir: 'dist',
+        sourcemap: mode === 'development',
+        minify: mode === 'production',
+        chunkSizeWarningLimit: 1000,
+        rollupOptions: {{
+          output: {{
+            manualChunks: {{
+              vendor: ['react', 'react-dom'],
+              ai: ['@google/genai']
+            }}
+          }}
         }}
-      }}
+      }},
+      css: {{
+        devSourcemap: true
+      }},
+      envPrefix: ['VITE_', 'GEMINI_'],
+      envDir: '.'
     }};
 }});
 '''
@@ -312,36 +362,123 @@ export default defineConfig(({{ mode }}) => {{
         self.print_status(f"Updated vite.config.ts for localhost:{port}", "success")
         return True
     
+    def clear_node_cache(self):
+        """Clear npm and node caches that might cause issues"""
+        try:
+            self.print_status("Clearing npm cache...", "info")
+            self.run_command(["npm", "cache", "clean", "--force"], check=False)
+            
+            # Remove node_modules and package-lock if they exist
+            node_modules = self.project_root / "node_modules"
+            if node_modules.exists():
+                self.print_status("Removing node_modules directory...", "info")
+                shutil.rmtree(node_modules)
+                
+        except Exception as e:
+            self.print_status(f"Cache clearing failed: {e}", "warning")
+
+    def check_typescript_config(self):
+        """Validate TypeScript configuration for common issues"""
+        tsconfig_path = self.project_root / "tsconfig.json"
+        if not tsconfig_path.exists():
+            self.print_status("tsconfig.json not found", "warning")
+            return False
+        
+        try:
+            with open(tsconfig_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            # Check for common problematic configurations
+            if '"moduleResolution": "node"' not in content and '"moduleResolution": "bundler"' not in content:
+                self.print_status("TypeScript moduleResolution might need updating", "warning")
+                
+            self.print_status("TypeScript configuration validated", "success")
+            return True
+        except Exception as e:
+            self.print_status(f"TypeScript config validation failed: {e}", "warning")
+            return False
+
     def install_dependencies(self):
-        """Install project dependencies"""
+        """Install project dependencies with robust error handling"""
         self.print_status("Installing project dependencies...", "info")
         
         package_lock = self.project_root / "package-lock.json"
+        max_retries = 3
         
-        try:
-            if package_lock.exists():
-                # Try npm ci first for reproducible builds
-                try:
-                    self.run_command(["npm", "ci"])
-                    self.print_status("Dependencies installed via npm ci", "success")
-                    return
-                except subprocess.CalledProcessError:
-                    self.print_status("npm ci failed, trying npm install", "warning")
-            
-            # Fallback to npm install
+        for attempt in range(max_retries):
             try:
-                self.run_command(["npm", "install"])
-                self.print_status("Dependencies installed via npm install", "success")
-            except subprocess.CalledProcessError:
-                # Try with legacy peer deps flag
-                self.print_status("Retrying with --legacy-peer-deps", "warning")
-                self.run_command(["npm", "install", "--legacy-peer-deps"])
-                self.print_status("Dependencies installed with --legacy-peer-deps", "success")
+                if package_lock.exists() and attempt == 0:
+                    # Try npm ci first for reproducible builds
+                    try:
+                        self.run_command(["npm", "ci"])
+                        self.print_status("Dependencies installed via npm ci", "success")
+                        return
+                    except subprocess.CalledProcessError:
+                        self.print_status("npm ci failed, trying npm install", "warning")
                 
-        except subprocess.CalledProcessError as e:
-            self.print_status("Failed to install dependencies", "error")
-            print(f"Error: {e}")
-            sys.exit(1)
+                # Fallback to npm install
+                try:
+                    cmd = ["npm", "install"]
+                    if attempt > 0:
+                        cmd.append("--legacy-peer-deps")
+                        self.print_status(f"Retry {attempt + 1}/{max_retries} with --legacy-peer-deps", "info")
+                    
+                    self.run_command(cmd)
+                    install_method = "npm install" + (" --legacy-peer-deps" if attempt > 0 else "")
+                    self.print_status(f"Dependencies installed via {install_method}", "success")
+                    return
+                    
+                except subprocess.CalledProcessError as e:
+                    if attempt < max_retries - 1:
+                        self.print_status(f"Installation attempt {attempt + 1} failed, retrying...", "warning")
+                        if attempt == 1:  # Clear cache on second retry
+                            self.clear_node_cache()
+                        continue
+                    else:
+                        raise e
+                        
+            except subprocess.CalledProcessError as e:
+                if attempt == max_retries - 1:
+                    self.print_status("All dependency installation attempts failed", "error")
+                    self.print_status("Try the following troubleshooting steps:", "info")
+                    print("1. Delete node_modules and package-lock.json")
+                    print("2. Run: npm cache clean --force")
+                    print("3. Run: npm install")
+                    print("4. If issues persist, try: npm install --legacy-peer-deps")
+                    sys.exit(1)
+
+    def validate_environment(self):
+        """Validate the development environment setup"""
+        self.print_status("Validating development environment...", "info")
+        
+        issues = []
+        
+        # Check if package.json exists
+        if not (self.project_root / "package.json").exists():
+            issues.append("package.json not found")
+        
+        # Check if node_modules exists
+        if not (self.project_root / "node_modules").exists():
+            issues.append("node_modules directory not found")
+        
+        # Check TypeScript config
+        if not self.check_typescript_config():
+            issues.append("TypeScript configuration issues detected")
+        
+        # Check for common problematic files
+        problematic_files = [".npmrc", ".yarnrc"]
+        for file in problematic_files:
+            if (self.project_root / file).exists():
+                issues.append(f"Found {file} which might cause conflicts")
+        
+        if issues:
+            self.print_status("Environment validation issues found:", "warning")
+            for issue in issues:
+                print(f"  - {issue}")
+        else:
+            self.print_status("Environment validation passed", "success")
+        
+        return len(issues) == 0
     
     def start_dev_server(self, port: int):
         """Start the development server"""
@@ -434,7 +571,10 @@ export default defineConfig(({{ mode }}) => {{
         # Step 4: Install dependencies
         self.install_dependencies()
         
-        # Step 5: Start the development server
+        # Step 5: Validate environment
+        self.validate_environment()
+        
+        # Step 6: Start the development server
         self.print_status("Setup complete! Starting development server...", "success")
         print("\nPress Ctrl+C to stop the development server")
         print("-" * 60)
